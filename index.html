@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>QUANTUM GRID — Minimax Battle</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600;800&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:#07080f;
+  --p1:#00f5d4;--p1d:#00a88e;--p1g:rgba(0,245,212,0.15);
+  --p2:#f72585;--p2d:#a0195a;--p2g:rgba(247,37,133,0.15);
+  --gold:#ffe44d;--goldd:rgba(255,228,77,0.2);
+  --panel:rgba(255,255,255,0.04);
+  --border:rgba(255,255,255,0.08);
+  --txt:#b0cfe0;--muted:#2a4560;
+  --card-w:90px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow-x:hidden}
+body{background:var(--bg);font-family:'Exo 2',sans-serif;color:var(--txt);min-height:100vh;cursor:default;overflow-y:auto}
+
+/* BG STARS */
+#stars{position:fixed;inset:0;z-index:0;pointer-events:none}
+
+/* FX */
+#fx{position:fixed;inset:0;z-index:80;pointer-events:none}
+
+/* SCANLINES */
+body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.06) 2px,rgba(0,0,0,0.06) 4px);pointer-events:none;z-index:90}
+
+/* WRAP */
+.wrap{position:relative;z-index:10;display:flex;flex-direction:column;align-items:center;padding:20px 16px 50px;gap:16px;min-height:100vh}
+
+/* ── CHARACTER SELECT ── */
+#charSelect{
+  position:fixed;inset:0;z-index:200;
+  background:rgba(7,8,15,0.97);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;
+  padding:30px;
+}
+.cs-title{font-family:'Orbitron',sans-serif;font-size:clamp(1.5rem,4vw,2.5rem);font-weight:900;letter-spacing:6px;color:var(--gold);text-shadow:0 0 30px rgba(255,228,77,0.5);text-align:center}
+.cs-sub{font-family:'Share Tech Mono',monospace;font-size:0.65rem;letter-spacing:4px;color:var(--muted);text-align:center}
+.cs-chars{display:flex;gap:20px;flex-wrap:wrap;justify-content:center}
+.cs-card{
+  width:140px;padding:20px 16px;
+  background:var(--panel);border:2px solid var(--border);border-radius:12px;
+  display:flex;flex-direction:column;align-items:center;gap:10px;
+  cursor:pointer;transition:all 0.3s;text-align:center;
+}
+.cs-card:hover{transform:translateY(-6px) scale(1.04);border-color:var(--gold);box-shadow:0 0 30px rgba(255,228,77,0.25)}
+.cs-avatar{font-size:3rem;line-height:1}
+.cs-name{font-family:'Orbitron',sans-serif;font-size:0.75rem;font-weight:700;letter-spacing:2px}
+.cs-desc{font-size:0.65rem;color:var(--muted);line-height:1.4}
+.cs-stat{font-family:'Share Tech Mono',monospace;font-size:0.6rem;padding:3px 8px;border-radius:10px;border:1px solid;margin-top:4px}
+
+/* ── HEADER ── */
+.game-header{text-align:center;width:100%}
+.gh-eyebrow{font-family:'Share Tech Mono',monospace;font-size:0.55rem;letter-spacing:5px;color:var(--p1);opacity:0.7;margin-bottom:4px}
+.gh-title{font-family:'Orbitron',sans-serif;font-size:clamp(1.6rem,5vw,3rem);font-weight:900;letter-spacing:4px;background:linear-gradient(90deg,var(--p1),#fff,var(--p2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:hueShift 6s linear infinite}
+@keyframes hueShift{0%,100%{filter:hue-rotate(0deg)}50%{filter:hue-rotate(30deg)}}
+.gh-sub{font-family:'Share Tech Mono',monospace;font-size:0.55rem;color:var(--muted);letter-spacing:3px;margin-top:4px}
+
+/* ── PLAYERS BAR ── */
+.players-bar{display:grid;grid-template-columns:1fr auto 1fr;width:100%;max-width:600px;gap:10px;align-items:center}
+.player-card{
+  background:var(--panel);border:1px solid var(--border);border-radius:10px;
+  padding:12px 16px;display:flex;align-items:center;gap:12px;
+  transition:all 0.3s;position:relative;overflow:hidden;
+}
+.player-card::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity 0.3s}
+.player-card.p1::before{background:radial-gradient(circle at 0% 50%,var(--p1g),transparent)}
+.player-card.p2::before{background:radial-gradient(circle at 100% 50%,var(--p2g),transparent)}
+.player-card.p2{flex-direction:row-reverse;text-align:right}
+.player-card.active::before{opacity:1}
+.player-card.p1.active{border-color:var(--p1);box-shadow:0 0 20px rgba(0,245,212,0.2)}
+.player-card.p2.active{border-color:var(--p2);box-shadow:0 0 20px rgba(247,37,133,0.2)}
+.p-avatar{font-size:2rem;line-height:1;flex-shrink:0}
+.p-info{flex:1}
+.p-name{font-family:'Orbitron',sans-serif;font-size:0.7rem;font-weight:700;letter-spacing:1px}
+.player-card.p1 .p-name{color:var(--p1)}
+.player-card.p2 .p-name{color:var(--p2)}
+.p-score{font-family:'Orbitron',sans-serif;font-size:1.8rem;font-weight:900;line-height:1;transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1)}
+.player-card.p1 .p-score{color:var(--p1);text-shadow:0 0 15px var(--p1)}
+.player-card.p2 .p-score{color:var(--p2);text-shadow:0 0 15px var(--p2)}
+.p-score.pop{transform:scale(1.5)}
+.vs-badge{font-family:'Orbitron',sans-serif;font-size:0.8rem;font-weight:900;color:var(--muted);text-align:center;line-height:1}
+
+/* ── POWER CARDS ── */
+.cards-section{width:100%;max-width:600px}
+.cards-label{font-family:'Share Tech Mono',monospace;font-size:0.55rem;letter-spacing:3px;color:var(--muted);text-transform:uppercase;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.cards-label span{color:var(--gold)}
+.cards-row{display:flex;gap:8px;flex-wrap:wrap}
+.power-card{
+  width:var(--card-w);padding:10px 8px;
+  background:rgba(255,228,77,0.05);border:1px solid rgba(255,228,77,0.2);border-radius:8px;
+  text-align:center;cursor:pointer;transition:all 0.25s;
+  position:relative;overflow:hidden;user-select:none;
+}
+.power-card:hover:not(.used):not(.disabled){transform:translateY(-4px) scale(1.05);border-color:var(--gold);box-shadow:0 0 20px rgba(255,228,77,0.3)}
+.power-card.used{opacity:0.3;cursor:default;filter:grayscale(1)}
+.power-card.disabled{opacity:0.5;cursor:not-allowed}
+.pc-icon{font-size:1.6rem;display:block;margin-bottom:4px}
+.pc-name{font-family:'Orbitron',sans-serif;font-size:0.55rem;font-weight:700;letter-spacing:1px;color:var(--gold)}
+.pc-desc{font-size:0.58rem;color:var(--muted);margin-top:3px;line-height:1.3}
+.power-card.active-card{border-color:var(--gold);background:rgba(255,228,77,0.15);box-shadow:0 0 25px rgba(255,228,77,0.4);animation:cardPulse 0.8s ease infinite alternate}
+@keyframes cardPulse{from{box-shadow:0 0 15px rgba(255,228,77,0.3)}to{box-shadow:0 0 35px rgba(255,228,77,0.7)}}
+.charge-ring{position:absolute;inset:0;border-radius:8px;border:3px solid var(--gold);transform:scaleX(0);transform-origin:left;transition:transform 0.05s linear}
+
+/* ── STATUS ── */
+.status-area{width:100%;max-width:600px;display:flex;flex-direction:column;gap:6px}
+.status-box{
+  background:var(--panel);border:1px solid var(--border);border-radius:8px;
+  padding:12px 20px;text-align:center;position:relative;overflow:hidden;
+}
+.status-text{font-family:'Orbitron',sans-serif;font-size:0.8rem;font-weight:700;letter-spacing:2px;transition:all 0.3s}
+.s-p1{color:var(--p1);text-shadow:0 0 12px var(--p1)}
+.s-p2{color:var(--p2);text-shadow:0 0 12px var(--p2)}
+.s-win{color:var(--gold);text-shadow:0 0 20px var(--gold);animation:statusPop 0.4s ease}
+.s-draw{color:var(--muted)}
+@keyframes statusPop{0%{transform:scale(0.8)}60%{transform:scale(1.1)}100%{transform:scale(1)}}
+
+/* Thinking scan */
+.scan-bar{height:2px;background:var(--border);border-radius:1px;overflow:hidden;opacity:0;transition:opacity 0.2s}
+.scan-bar.on{opacity:1}
+.scan-fill{height:100%;width:35%;background:linear-gradient(90deg,transparent,var(--p2),transparent);animation:scanAnim 0.7s linear infinite}
+@keyframes scanAnim{0%{transform:translateX(-200%)}100%{transform:translateX(500%)}
+
+/* ── CHARGE BAR ── */
+}
+.charge-section{width:100%;max-width:600px;height:6px;background:var(--border);border-radius:3px;overflow:hidden;opacity:0;transition:opacity 0.3s}
+.charge-section.show{opacity:1}
+.charge-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--p1),var(--gold));border-radius:3px;transition:width 0.05s linear;box-shadow:0 0 8px var(--p1)}
+
+/* ── BOARD ── */
+.board-wrap{position:relative}
+.board{
+  display:grid;grid-template-columns:repeat(3,1fr);
+  gap:6px;padding:6px;
+  background:rgba(0,245,212,0.05);
+  border:1px solid rgba(0,245,212,0.15);
+  border-radius:16px;
+  box-shadow:0 0 40px rgba(0,245,212,0.06),0 0 80px rgba(247,37,133,0.04);
+  position:relative;
+}
+
+/* board corner accents */
+.board::before,.board::after{content:'';position:absolute;width:20px;height:20px;border-color:var(--p1);border-style:solid}
+.board::before{top:-2px;left:-2px;border-width:3px 0 0 3px;border-radius:4px 0 0 0}
+.board::after{bottom:-2px;right:-2px;border-width:0 3px 3px 0;border-radius:0 0 4px 0}
+
+/* ── CELL ── */
+.cell{
+  width:108px;height:108px;
+  background:rgba(255,255,255,0.02);
+  border:1px solid rgba(255,255,255,0.06);
+  border-radius:12px;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;position:relative;overflow:hidden;
+  transition:background 0.2s,border-color 0.2s,transform 0.2s;
+  user-select:none;
+}
+
+/* hover glow fill */
+.cell::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(circle at center,rgba(0,245,212,0.1),transparent 70%);
+  opacity:0;transition:opacity 0.2s;border-radius:12px;
+}
+.cell:not(.taken):hover::before{opacity:1}
+.cell:not(.taken):hover{border-color:rgba(0,245,212,0.3);transform:scale(1.04)}
+
+/* CORRUPTED cell */
+.cell.corrupted{
+  background:rgba(255,60,20,0.07);
+  border-color:rgba(255,60,20,0.3);
+  animation:corruptFlicker 0.8s step-end infinite;
+}
+@keyframes corruptFlicker{0%,100%{opacity:1}50%{opacity:0.7;filter:hue-rotate(180deg)}}
+.cell.corrupted::after{content:'⚠';position:absolute;top:4px;right:6px;font-size:0.6rem;color:#ff3c14;opacity:0.7}
+
+/* SHIELDED cell */
+.cell.shielded{border-color:rgba(100,200,255,0.6);box-shadow:inset 0 0 15px rgba(100,200,255,0.15)}
+.cell.shielded::after{content:'🛡';position:absolute;top:4px;right:4px;font-size:0.65rem}
+
+/* BOMB cell */
+.cell.bombed{animation:bombTick 0.4s ease infinite alternate}
+@keyframes bombTick{from{border-color:rgba(255,100,0,0.3)}to{border-color:rgba(255,100,0,0.9);box-shadow:0 0 15px rgba(255,100,0,0.4)}}
+
+/* mark */
+.cell-mark{
+  font-size:3.2rem;line-height:1;
+  opacity:0;transform:scale(0) rotate(-15deg);
+  transition:none;position:relative;z-index:2;
+  font-family:'Orbitron',sans-serif;font-weight:900;
+}
+.cell-mark.x{color:var(--p1);text-shadow:0 0 15px var(--p1),0 0 40px rgba(0,245,212,0.4)}
+.cell-mark.o{color:var(--p2);text-shadow:0 0 15px var(--p2),0 0 40px rgba(247,37,133,0.4)}
+.cell.placed .cell-mark{animation:markBounce 0.5s cubic-bezier(0.34,1.76,0.64,1) forwards}
+@keyframes markBounce{
+  0%{opacity:0;transform:scale(0) rotate(-15deg)}
+  50%{opacity:1;transform:scale(1.3) rotate(5deg)}
+  75%{transform:scale(0.9) rotate(-3deg)}
+  100%{opacity:1;transform:scale(1) rotate(0deg)}
+}
+
+/* POWER STRIKE cell glow */
+.cell.power-target{animation:powerGlow 0.3s ease infinite alternate}
+@keyframes powerGlow{from{box-shadow:0 0 10px var(--gold)}to{box-shadow:0 0 30px var(--gold),inset 0 0 20px rgba(255,228,77,0.2)}}
+
+/* WINNER cells */
+.cell.winner .cell-mark{animation:winnerPulse 0.5s ease infinite alternate}
+@keyframes winnerPulse{from{filter:brightness(1)}to{filter:brightness(2) drop-shadow(0 0 10px currentColor)}}
+
+/* Ghost hover */
+.cell-ghost{position:absolute;font-family:'Orbitron',sans-serif;font-size:2.8rem;font-weight:900;color:var(--p1);opacity:0;transition:opacity 0.15s;pointer-events:none}
+.cell:not(.taken):hover .cell-ghost{opacity:0.12}
+
+/* cell index badge */
+.cell-idx{position:absolute;bottom:5px;right:7px;font-family:'Share Tech Mono',monospace;font-size:0.5rem;color:var(--muted);opacity:0.5}
+
+/* WIN LINE CANVAS */
+#winCanvas{position:absolute;inset:0;pointer-events:none;z-index:20;width:100%;height:100%}
+
+/* QUANTUM flash */
+.cell.quantum-flash{animation:qFlash 0.3s ease}
+@keyframes qFlash{0%,100%{background:rgba(255,255,255,0)}50%{background:rgba(0,245,212,0.25)}}
+
+/* ── CROWD BAR ── */
+.crowd-section{width:100%;max-width:600px}
+.crowd-label{font-family:'Share Tech Mono',monospace;font-size:0.55rem;letter-spacing:3px;color:var(--muted);margin-bottom:6px;display:flex;justify-content:space-between}
+.crowd-label .cl{color:var(--p1)}.crowd-label .cr{color:var(--p2)}
+.crowd-track{height:12px;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative}
+.crowd-fill{
+  position:absolute;top:0;left:0;height:100%;
+  background:linear-gradient(90deg,var(--p1),var(--p1d));
+  transition:width 0.6s cubic-bezier(0.4,0,0.2,1);
+  border-radius:6px 0 0 6px;
+}
+.crowd-mid{position:absolute;top:0;left:50%;width:2px;height:100%;background:rgba(255,255,255,0.15);transform:translateX(-50%)}
+.crowd-emoji{position:absolute;bottom:14px;font-size:0.9rem;transition:left 0.6s cubic-bezier(0.4,0,0.2,1);transform:translateX(-50%)}
+
+/* ── ROUND TRACKER ── */
+.round-row{display:flex;gap:8px;align-items:center}
+.round-pip{width:10px;height:10px;border-radius:50%;background:var(--border);transition:all 0.4s;border:1px solid rgba(255,255,255,0.1)}
+.round-pip.done-p1{background:var(--p1);box-shadow:0 0 8px var(--p1)}
+.round-pip.done-p2{background:var(--p2);box-shadow:0 0 8px var(--p2)}
+.round-pip.done-d{background:var(--gold);box-shadow:0 0 8px var(--gold)}
+.round-label{font-family:'Share Tech Mono',monospace;font-size:0.55rem;letter-spacing:2px;color:var(--muted)}
+
+/* ── AI RAGE MODE ── */
+body.rage-mode .board{animation:rageBorder 0.3s ease infinite alternate}
+@keyframes rageBorder{from{box-shadow:0 0 20px rgba(247,37,133,0.2)}to{box-shadow:0 0 50px rgba(247,37,133,0.6),inset 0 0 30px rgba(247,37,133,0.1)}}
+body.rage-mode .gh-title{animation:rageTitle 0.1s step-end infinite}
+@keyframes rageTitle{0%,100%{filter:hue-rotate(0deg)}50%{filter:hue-rotate(180deg) brightness(1.5)}}
+
+/* ── MINIMAX PANEL ── */
+.mm-panel{width:100%;max-width:600px;background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.mm-head{padding:10px 16px;background:rgba(255,255,255,0.03);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.mm-head-title{font-family:'Share Tech Mono',monospace;font-size:0.58rem;letter-spacing:3px;color:var(--muted);text-transform:uppercase}
+.mm-stats{display:flex;gap:12px}
+.mm-stat{font-family:'Orbitron',sans-serif;font-size:0.6rem;font-weight:700}
+.mm-stat.nodes{color:var(--p1)}.mm-stat.depth{color:var(--gold)}
+.mm-body{padding:10px 14px;display:flex;flex-direction:column;gap:4px;max-height:110px;overflow-y:auto}
+.mm-row{display:flex;align-items:center;gap:8px;font-family:'Share Tech Mono',monospace;font-size:0.62rem;padding:4px 6px;border-radius:3px;opacity:0;animation:mmFade 0.2s forwards}
+@keyframes mmFade{to{opacity:1}}
+.mm-row.best{color:var(--gold);background:rgba(255,228,77,0.06);border-left:2px solid var(--gold)}
+.mm-row.check{color:var(--muted);border-left:2px solid transparent}
+.mm-row.chosen{color:var(--p1);background:rgba(0,245,212,0.06);border-left:2px solid var(--p1);font-weight:bold}
+
+/* ── DIFF PILLS ── */
+.diff-row{display:flex;gap:6px}
+.diff-pill{padding:6px 14px;border-radius:16px;border:1px solid var(--border);font-family:'Share Tech Mono',monospace;font-size:0.6rem;letter-spacing:2px;cursor:pointer;transition:all 0.2s;background:var(--panel);color:var(--muted);text-transform:uppercase}
+.diff-pill:hover{border-color:var(--p1);color:var(--p1)}
+.diff-pill.active{background:rgba(0,245,212,0.1);border-color:var(--p1);color:var(--p1);box-shadow:0 0 10px rgba(0,245,212,0.15)}
+.diff-pill.d-h.active{background:rgba(247,37,133,0.1);border-color:var(--p2);color:var(--p2);box-shadow:0 0 10px rgba(247,37,133,0.15)}
+
+/* ── BOTTOM BUTTONS ── */
+.btn-row{display:flex;gap:8px;width:100%;max-width:600px}
+.btn{flex:1;padding:12px;border-radius:8px;border:1px solid var(--border);font-family:'Orbitron',sans-serif;font-size:0.65rem;font-weight:700;letter-spacing:2px;cursor:pointer;transition:all 0.2s;text-transform:uppercase}
+.btn-new{background:linear-gradient(135deg,rgba(0,245,212,0.15),rgba(0,245,212,0.05));color:var(--p1);border-color:var(--p1)}
+.btn-new:hover{background:rgba(0,245,212,0.25);box-shadow:0 0 25px rgba(0,245,212,0.3);transform:translateY(-2px)}
+.btn-char{background:var(--panel);color:var(--gold);border-color:rgba(255,228,77,0.3)}
+.btn-char:hover{border-color:var(--gold);box-shadow:0 0 15px rgba(255,228,77,0.2)}
+.btn-reset{background:transparent;color:var(--muted)}
+.btn-reset:hover{border-color:var(--p2);color:var(--p2)}
+
+/* ── TOOLTIP ── */
+.tooltip{position:fixed;background:rgba(10,15,25,0.95);border:1px solid var(--gold);border-radius:6px;padding:8px 12px;font-size:0.7rem;color:var(--gold);pointer-events:none;z-index:300;max-width:180px;text-align:center;line-height:1.4;display:none;font-family:'Share Tech Mono',monospace}
+
+/* ── WIN OVERLAY ── */
+#winOverlay{position:fixed;inset:0;z-index:150;display:none;flex-direction:column;align-items:center;justify-content:center;gap:20px;background:rgba(7,8,15,0.85);backdrop-filter:blur(6px)}
+.win-banner{font-family:'Orbitron',sans-serif;font-size:clamp(2rem,6vw,4rem);font-weight:900;letter-spacing:4px;text-align:center;animation:bannerPop 0.6s cubic-bezier(0.34,1.56,0.64,1)}
+@keyframes bannerPop{from{transform:scale(0) rotate(-5deg);opacity:0}to{transform:scale(1) rotate(0);opacity:1}}
+.win-sub{font-family:'Share Tech Mono',monospace;font-size:0.75rem;letter-spacing:3px;color:var(--muted)}
+.win-next-btn{padding:14px 32px;border-radius:8px;border:2px solid var(--gold);background:rgba(255,228,77,0.1);color:var(--gold);font-family:'Orbitron',sans-serif;font-size:0.8rem;font-weight:700;letter-spacing:3px;cursor:pointer;transition:all 0.2s;text-transform:uppercase}
+.win-next-btn:hover{background:rgba(255,228,77,0.2);box-shadow:0 0 30px rgba(255,228,77,0.4);transform:scale(1.05)}
+
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+@keyframes shake{0%,100%{transform:none}20%{transform:translate(-5px,3px)}40%{transform:translate(5px,-3px)}60%{transform:translate(-4px,4px)}80%{transform:translate(4px,-2px)}}
+.shake{animation:shake 0.35s ease}
+
+@media(max-width:500px){
+  .cell{width:88px;height:88px}.cell-mark{font-size:2.6rem}
+  :root{--card-w:80px}
+  .cs-chars{gap:12px}.cs-card{width:120px}
+}
+</style>
+</head>
+<body>
+
+<!-- CHARACTER SELECT -->
+<div id="charSelect">
+  <div class="cs-title">⚡ CHOOSE YOUR WARRIOR</div>
+  <div class="cs-sub">// YOUR SYMBOL. YOUR POWER. YOUR DESTINY //</div>
+  <div class="cs-chars" id="csChars"></div>
+</div>
+
+<!-- WIN OVERLAY -->
+<div id="winOverlay">
+  <div class="win-banner" id="winBanner">YOU WIN!</div>
+  <div class="win-sub" id="winSub">MINIMAX HAD NO ANSWER</div>
+  <button class="win-next-btn" onclick="closeWin()">⟳ PLAY AGAIN</button>
+</div>
+
+<!-- STARS BG -->
+<canvas id="stars"></canvas>
+<!-- PARTICLES -->
+<canvas id="fx"></canvas>
+
+<!-- TOOLTIP -->
+<div class="tooltip" id="tooltip"></div>
+
+<div class="wrap">
+
+  <!-- Header -->
+  <div class="game-header">
+    <div class="gh-eyebrow">▸ minimax · alpha-beta pruning · quantum mechanics</div>
+    <div class="gh-title">QUANTUM GRID</div>
+    <div class="gh-sub">// TIC TAC TOE — EVOLVED //</div>
+  </div>
+
+  <!-- Players -->
+  <div class="players-bar">
+    <div class="player-card p1 active" id="cardP1">
+      <div class="p-avatar" id="p1avatar">🔥</div>
+      <div class="p-info">
+        <div class="p-name" id="p1name">PLAYER</div>
+        <div class="p-score" id="sP1">0</div>
+      </div>
+    </div>
+    <div>
+      <div class="vs-badge">VS<br><small style="font-size:0.5rem;letter-spacing:1px;color:var(--muted)" id="drawBadge">0 DRAWS</small></div>
+    </div>
+    <div class="player-card p2" id="cardP2">
+      <div class="p-info" style="text-align:right">
+        <div class="p-name">AI NEXUS</div>
+        <div class="p-score" id="sP2">0</div>
+      </div>
+      <div class="p-avatar">🤖</div>
+    </div>
+  </div>
+
+  <!-- Round tracker -->
+  <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:100%;max-width:600px">
+    <div class="crowd-label"><span class="cl" id="p1crowdLabel">YOU</span><span style="color:var(--muted);font-size:0.5rem">CROWD ENERGY</span><span class="cr">AI NEXUS</span></div>
+    <div class="crowd-track" style="width:100%;max-width:600px">
+      <div class="crowd-fill" id="crowdFill" style="width:50%"></div>
+      <div class="crowd-mid"></div>
+      <div class="crowd-emoji" id="crowdEmoji" style="left:50%">⚡</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:4px">
+      <div class="round-label">ROUND</div>
+      <div class="round-row" id="roundPips"></div>
+      <div class="round-label" id="roundNum">1 / 5</div>
+    </div>
+  </div>
+
+  <!-- Power Cards -->
+  <div class="cards-section">
+    <div class="cards-label">⚡ POWER CARDS <span id="cardsInfo">Click a card, then click a cell</span></div>
+    <div class="cards-row" id="cardsRow"></div>
+  </div>
+
+  <!-- Status -->
+  <div class="status-area">
+    <div class="status-box">
+      <div class="status-text s-p1" id="statusText">CHOOSE YOUR MOVE, WARRIOR</div>
+    </div>
+    <div class="scan-bar" id="scanBar"><div class="scan-fill"></div></div>
+  </div>
+
+  <!-- Charge bar -->
+  <div class="charge-section" id="chargeSection">
+    <div class="charge-fill" id="chargeFill"></div>
+  </div>
+
+  <!-- Board -->
+  <div class="board-wrap">
+    <canvas id="winCanvas"></canvas>
+    <div class="board" id="board"></div>
+  </div>
+
+  <!-- Difficulty -->
+  <div class="diff-row">
+    <div class="diff-pill active" id="dp-easy" onclick="setDiff('easy')">Easy</div>
+    <div class="diff-pill" id="dp-med" onclick="setDiff('med')">Medium</div>
+    <div class="diff-pill d-h" id="dp-hard" onclick="setDiff('hard')">Unbeatable</div>
+  </div>
+
+  <!-- Minimax log -->
+  <div class="mm-panel">
+    <div class="mm-head">
+      <div class="mm-head-title">▸ Minimax Engine</div>
+      <div class="mm-stats">
+        <div class="mm-stat nodes">nodes: <span id="mmNodes">0</span></div>
+        <div class="mm-stat depth">depth: <span id="mmDepth">—</span></div>
+      </div>
+    </div>
+    <div class="mm-body" id="mmBody">
+      <div class="mm-row check" style="opacity:1">Awaiting computation...</div>
+    </div>
+  </div>
+
+  <!-- Buttons -->
+  <div class="btn-row">
+    <button class="btn btn-new" onclick="newGame()">⟳ NEW GAME</button>
+    <button class="btn btn-char" onclick="showCharSelect()">🧬 CHARACTER</button>
+    <button class="btn btn-reset" onclick="resetAll()">✕ RESET</button>
+  </div>
+
+</div>
+
+<script>
+// ═══════════════════════════ STARS BG ═══════════════════════════
+(()=>{
+  const c=document.getElementById('stars'),ctx=c.getContext('2d');
+  const stars=[];
+  function resize(){c.width=window.innerWidth;c.height=window.innerHeight;stars.length=0;for(let i=0;i<120;i++)stars.push({x:Math.random()*c.width,y:Math.random()*c.height,r:Math.random()*1.5+0.3,a:Math.random(),da:Math.random()*0.01+0.003})}
+  resize();window.addEventListener('resize',resize);
+  function draw(){ctx.clearRect(0,0,c.width,c.height);stars.forEach(s=>{s.a+=s.da;if(s.a>1||s.a<0)s.da*=-1;ctx.globalAlpha=s.a*0.6;ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fill()});ctx.globalAlpha=1;requestAnimationFrame(draw)}
+  draw();
+})();
+
+// ═══════════════════════════ PARTICLES ═══════════════════════════
+const fx=document.getElementById('fx'),fxCtx=fx.getContext('2d');
+let parts=[];
+function resizeFX(){fx.width=window.innerWidth;fx.height=window.innerHeight}
+resizeFX();window.addEventListener('resize',resizeFX);
+function spawnParts(x,y,color,n=20,speed=5){for(let i=0;i<n;i++){const a=Math.PI*2*i/n+Math.random()*0.6,sp=Math.random()*speed+2;parts.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,r:Math.random()*4+2,alpha:1,color,decay:Math.random()*0.025+0.015})}}
+function spawnRipple(x,y,color){parts.push({type:'ripple',x,y,r:0,alpha:0.9,color})}
+function spawnText(x,y,text,color){parts.push({type:'text',x,y,vy:-2,alpha:1,text,color,decay:0.02})}
+(function animParts(){
+  fxCtx.clearRect(0,0,fx.width,fx.height);
+  parts=parts.filter(p=>p.alpha>0);
+  parts.forEach(p=>{
+    if(p.type==='ripple'){p.r+=7;p.alpha-=0.045;fxCtx.globalAlpha=Math.max(0,p.alpha);fxCtx.beginPath();fxCtx.arc(p.x,p.y,p.r,0,Math.PI*2);fxCtx.strokeStyle=p.color;fxCtx.lineWidth=2;fxCtx.shadowBlur=12;fxCtx.shadowColor=p.color;fxCtx.stroke();fxCtx.shadowBlur=0;if(p.r>100)p.alpha=0}
+    else if(p.type==='text'){p.y+=p.vy;p.alpha-=p.decay;fxCtx.globalAlpha=Math.max(0,p.alpha);fxCtx.font='bold 18px Orbitron,sans-serif';fxCtx.fillStyle=p.color;fxCtx.shadowColor=p.color;fxCtx.shadowBlur=10;fxCtx.textAlign='center';fxCtx.fillText(p.text,p.x,p.y);fxCtx.shadowBlur=0}
+    else{p.x+=p.vx;p.y+=p.vy;p.vy+=0.15;p.alpha-=p.decay;fxCtx.globalAlpha=Math.max(0,p.alpha);fxCtx.fillStyle=p.color;fxCtx.shadowBlur=8;fxCtx.shadowColor=p.color;fxCtx.beginPath();fxCtx.arc(p.x,p.y,p.r,0,Math.PI*2);fxCtx.fill();fxCtx.shadowBlur=0}
+  });
+  fxCtx.globalAlpha=1;requestAnimationFrame(animParts);
+})();
+
+// ═══════════════════════════ AUDIO ═══════════════════════════
+let audioCtx;
+function getAudio(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();return audioCtx}
+function sfx(type){
+  try{
+    const ctx=getAudio(),now=ctx.currentTime;
+    const osc=ctx.createOscillator(),gain=ctx.createGain();
+    osc.connect(gain);gain.connect(ctx.destination);
+    const conf={
+      place:{type:'sine',f:[440,280],dur:0.18,vol:0.15},
+      ai:{type:'square',f:[200,350],dur:0.15,vol:0.08},
+      win:{chord:[[440,0],[554,0.1],[659,0.2]],dur:0.5},
+      lose:{type:'sawtooth',f:[300,80],dur:0.5,vol:0.1},
+      draw:{type:'triangle',f:[330,330],dur:0.35,vol:0.1},
+      power:{type:'sine',f:[800,1200],dur:0.2,vol:0.12},
+      charge:{type:'sine',f:[300,600],dur:0.1,vol:0.06},
+      corrupt:{type:'square',f:[150,100],dur:0.3,vol:0.08},
+      card:{type:'sine',f:[600,800],dur:0.15,vol:0.1},
+    }[type];
+    if(!conf)return;
+    if(conf.chord){conf.chord.forEach(([freq,delay])=>{const o=ctx.createOscillator(),g=ctx.createGain();o.connect(g);g.connect(ctx.destination);o.type='sine';o.frequency.value=freq;g.gain.setValueAtTime(0.2,now+delay);g.gain.exponentialRampToValueAtTime(0.001,now+delay+conf.dur);o.start(now+delay);o.stop(now+delay+conf.dur)});return}
+    osc.type=conf.type;
+    osc.frequency.setValueAtTime(conf.f[0],now);
+    osc.frequency.exponentialRampToValueAtTime(conf.f[1],now+conf.dur);
+    gain.gain.setValueAtTime(conf.vol,now);
+    gain.gain.exponentialRampToValueAtTime(0.001,now+conf.dur);
+    osc.start(now);osc.stop(now+conf.dur);
+  }catch(e){}
+}
+
+// ═══════════════════════════ CHARACTERS ═══════════════════════════
+const CHARS=[
+  {id:'fire',name:'INFERNO',avatar:'🔥',symbol:'✦',color:'#ff6b35',desc:'Burns through defenses',power:'Scorched Earth',stat:'ATK +2',statColor:'#ff6b35'},
+  {id:'cyber',name:'CYBER-X',avatar:'⚡',symbol:'X',color:'#00f5d4',desc:'Precise and calculated',power:'Power Strike',stat:'SPD +3',statColor:'#00f5d4'},
+  {id:'void',name:'VOID',avatar:'🌑',symbol:'◆',color:'#a855f7',desc:'Bends space and time',power:'Quantum Move',stat:'INT +4',statColor:'#a855f7'},
+  {id:'storm',name:'STORM',avatar:'🌪️',symbol:'⊕',color:'#38bdf8',desc:'Chaotic and unpredictable',power:'Corruption Wave',stat:'DEF +2',statColor:'#38bdf8'},
+];
+
+let chosenChar = CHARS[1]; // default
+
+function buildCharSelect(){
+  const el=document.getElementById('csChars');
+  el.innerHTML='';
+  CHARS.forEach(c=>{
+    const div=document.createElement('div');
+    div.className='cs-card';
+    div.style.cssText=`--cc:${c.color}`;
+    div.innerHTML=`<div class="cs-avatar">${c.avatar}</div><div class="cs-name" style="color:${c.color}">${c.name}</div><div class="cs-desc">${c.desc}</div><div class="cs-stat" style="color:${c.statColor};border-color:${c.statColor}40">${c.stat}</div>`;
+    div.addEventListener('click',()=>selectChar(c));
+    el.appendChild(div);
+  });
+}
+
+function selectChar(c){
+  chosenChar=c;
+  document.getElementById('charSelect').style.display='none';
+  document.getElementById('p1avatar').textContent=c.avatar;
+  document.getElementById('p1name').textContent=c.name;
+  document.getElementById('p1crowdLabel').textContent=c.name;
+  document.documentElement.style.setProperty('--p1',c.color);
+  document.documentElement.style.setProperty('--p1d',c.color+'88');
+  document.documentElement.style.setProperty('--p1g',c.color+'26');
+  buildPowerCards();
+  newGame();
+  sfx('win');
+}
+
+function showCharSelect(){document.getElementById('charSelect').style.display='flex';buildCharSelect()}
+
+// ═══════════════════════════ POWER CARDS ═══════════════════════════
+const BASE_CARDS=[
+  {id:'shield',icon:'🛡',name:'SHIELD',desc:'Protect a cell from AI',uses:1},
+  {id:'bomb',icon:'💣',name:'BOMB',desc:'Destroy any enemy cell',uses:1},
+  {id:'mirror',icon:'🔮',name:'MIRROR',desc:'Copy AI\'s last move position',uses:1},
+  {id:'quantum',icon:'⚛',name:'QUANTUM',desc:'Place in 2 cells at once',uses:1},
+];
+let cards=[];
+let activeCard=null;
+let lastAIMove=-1;
+
+function buildPowerCards(){
+  cards=BASE_CARDS.map(c=>({...c,used:false}));
+  renderCards();
+}
+
+function renderCards(){
+  const row=document.getElementById('cardsRow');
+  row.innerHTML='';
+  cards.forEach(c=>{
+    const div=document.createElement('div');
+    div.className='power-card'+(c.used?' used':'')+(activeCard===c.id?' active-card':'')+((!playerTurn||gameOver)?' disabled':'');
+    div.innerHTML=`<span class="pc-icon">${c.icon}</span><div class="pc-name">${c.name}</div><div class="pc-desc">${c.desc}</div>`;
+    div.title=c.desc;
+    if(!c.used&&playerTurn&&!gameOver){
+      div.addEventListener('click',()=>toggleCard(c.id));
+      div.addEventListener('mouseenter',e=>showTooltip(e,c.desc));
+      div.addEventListener('mouseleave',hideTooltip);
+    }
+    row.appendChild(div);
+  });
+}
+
+function toggleCard(id){
+  if(activeCard===id){activeCard=null}else{activeCard=id;sfx('card')}
+  renderCards();
+  setStatusText(activeCard?'SELECT A CELL TO USE '+activeCard.toUpperCase():'CHOOSE YOUR MOVE, WARRIOR','s-p1');
+}
+
+// ═══════════════════════════ TOOLTIP ═══════════════════════════
+function showTooltip(e,text){const t=document.getElementById('tooltip');t.textContent=text;t.style.display='block';moveTooltip(e)}
+function moveTooltip(e){const t=document.getElementById('tooltip');t.style.left=(e.clientX+12)+'px';t.style.top=(e.clientY-30)+'px'}
+function hideTooltip(){document.getElementById('tooltip').style.display='none'}
+
+// ═══════════════════════════ GAME STATE ═══════════════════════════
+let board=Array(9).fill(null);
+let gameOver=false,playerTurn=true;
+let difficulty='easy';
+let scores={p1:0,p2:0,d:0};
+let crowdEnergy=50; // 0=AI wins, 100=player wins
+let roundHistory=[];
+let totalNodes=0;
+let corruptedCells=[];
+let quantumMode=false; // for quantum card (store first pick)
+let quantumFirst=-1;
+const WIN_LINES=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+const CELL_POS=[[54,54],[162,54],[270,54],[54,162],[162,162],[270,162],[54,270],[162,270],[270,270]];
+
+// ═══════════════════════════ BUILD BOARD ═══════════════════════════
+function buildBoard(){
+  const b=document.getElementById('board');
+  b.querySelectorAll('.cell').forEach(c=>c.remove());
+  for(let i=0;i<9;i++){
+    const cell=document.createElement('div');
+    cell.className='cell';cell.id='cell'+i;
+    cell.innerHTML=`<span class="cell-ghost">${chosenChar.symbol||'X'}</span><span class="cell-mark" id="mark${i}"></span><span class="cell-idx">${i+1}</span>`;
+    cell.addEventListener('click',()=>onCellClick(i));
+    cell.addEventListener('mouseenter',e=>moveTooltip(e));
+    b.appendChild(cell);
+  }
+  setupWinCanvas();
+}
+
+function setupWinCanvas(){
+  const wc=document.getElementById('winCanvas');
+  const board=document.getElementById('board');
+  wc.width=board.offsetWidth||330;wc.height=board.offsetHeight||330;
+}
+
+// ═══════════════════════════ CELL CLICK ═══════════════════════════
+function onCellClick(idx){
+  if(gameOver||!playerTurn)return;
+
+  // POWER CARD ACTIONS
+  if(activeCard){
+    const card=cards.find(c=>c.id===activeCard);
+    if(!card||card.used)return;
+
+    if(activeCard==='shield'){
+      if(board[idx])return; // only empty cells
+      document.getElementById('cell'+idx).classList.add('shielded');
+      sfx('power');spawnText(getCellX(idx),getCellY(idx),'🛡 SHIELDED',chosenChar.color);
+      card.used=true;activeCard=null;renderCards();
+      setStatusText('CHOOSE YOUR MOVE, WARRIOR','s-p1');
+      return;
+    }
+    if(activeCard==='bomb'){
+      if(board[idx]!=='O')return; // only AI cells
+      board[idx]=null;
+      const cell=document.getElementById('cell'+idx);
+      cell.classList.remove('taken','placed','winner');
+      document.getElementById('mark'+idx).textContent='';
+      document.getElementById('mark'+idx).className='cell-mark';
+      spawnParts(getCellX(idx),getCellY(idx),chosenChar.color,30,8);
+      spawnText(getCellX(idx),getCellY(idx),'💥 BOMBED!',chosenChar.color);
+      sfx('corrupt');card.used=true;activeCard=null;renderCards();
+      setStatusText('CHOOSE YOUR MOVE, WARRIOR','s-p1');
+      shiftCrowd(5);return;
+    }
+    if(activeCard==='mirror'){
+      if(lastAIMove<0||board[lastAIMove])return;
+      sfx('power');card.used=true;activeCard=null;renderCards();
+      placeMove(lastAIMove,'X');shiftCrowd(8);return;
+    }
+    if(activeCard==='quantum'){
+      if(board[idx])return;
+      if(quantumFirst===-1){
+        quantumFirst=idx;
+        document.getElementById('cell'+idx).classList.add('quantum-flash');
+        spawnText(getCellX(idx),getCellY(idx),'⚛ SELECT 2ND',chosenChar.color);
+        setStatusText('NOW SELECT YOUR 2ND QUANTUM CELL','s-p1');
+        return;
+      } else {
+        if(idx===quantumFirst||board[idx]){return}
+        sfx('power');card.used=true;
+        const first=quantumFirst;quantumFirst=-1;activeCard=null;
+        board[first]='X';board[idx]='X';
+        placeMarkUI(first,'X');placeMarkUI(idx,'X');
+        spawnParts(getCellX(first),getCellY(first),chosenChar.color,20,6);
+        spawnParts(getCellX(idx),getCellY(idx),chosenChar.color,20,6);
+        spawnText(getCellX(idx),getCellY(idx),'⚛ QUANTUM!',chosenChar.color);
+        renderCards();
+        const result=checkWinner(board);
+        if(result){setTimeout(()=>endGame(result),200);return}
+        playerTurn=false;updateCards();updateStatus();
+        setTimeout(doAI,500);return;
+      }
+    }
+  }
+
+  // NORMAL MOVE
+  if(board[idx])return;
+  // Check corrupted
+  if(corruptedCells.includes(idx)){
+    spawnText(getCellX(idx),getCellY(idx),'⚠ CORRUPTED!','#ff3c14');sfx('corrupt');return;
+  }
+  placeMove(idx,'X');
+}
+
+function getCellX(idx){const c=document.getElementById('cell'+idx);const r=c.getBoundingClientRect();return r.left+r.width/2}
+function getCellY(idx){const c=document.getElementById('cell'+idx);const r=c.getBoundingClientRect();return r.top+r.height/2}
+
+// ═══════════════════════════ PLACE MOVE ═══════════════════════════
+function placeMove(idx,sym){
+  board[idx]=sym;
+  placeMarkUI(idx,sym);
+  const cx=getCellX(idx),cy=getCellY(idx);
+  const color=sym==='X'?chosenChar.color:'#f72585';
+  sfx(sym==='X'?'place':'ai');
+  spawnParts(cx,cy,color,10,4);
+  spawnRipple(cx,cy,color);
+  if(sym==='O')lastAIMove=idx;
+
+  const result=checkWinner(board);
+  if(result){setTimeout(()=>endGame(result),200);return}
+  playerTurn=sym!=='X';
+  updateStatus();updateCards();
+  if(!playerTurn)setTimeout(doAI,450);
+}
+
+function placeMarkUI(idx,sym){
+  const cell=document.getElementById('cell'+idx);
+  const mark=document.getElementById('mark'+idx);
+  mark.textContent=sym==='X'?(chosenChar.symbol||'X'):'O';
+  mark.className='cell-mark '+(sym==='X'?'x':'o');
+  if(sym==='X')mark.style.color=chosenChar.color;
+  cell.classList.add('taken','placed');
+}
+
+// ═══════════════════════════ AI ═══════════════════════════
+function doAI(){
+  if(gameOver)return;
+  totalNodes=0;const log=[];
+  const maxDepth=difficulty==='easy'?0:difficulty==='med'?3:9;
+  const empty=board.map((v,i)=>v===null?i:-1).filter(i=>i>=0);
+
+  let bestMove;
+  if(difficulty==='easy'||empty.length===0){
+    bestMove=empty[Math.floor(Math.random()*empty.length)];
+    log.push({type:'check',text:`Random selection → cell ${bestMove+1}`});
+  } else {
+    let best=-Infinity;
+    for(const idx of empty){
+      board[idx]='O';
+      const score=minimax(board,0,false,-Infinity,Infinity,maxDepth);
+      board[idx]=null;
+      log.push({type:score>best?'best':'check',text:`Cell ${idx+1} → score ${score>=0?'+'+score:score}`});
+      if(score>best){best=score;bestMove=idx}
+    }
+    log.push({type:'chosen',text:`▶ Chosen: cell ${bestMove+1}`});
+  }
+
+  document.getElementById('mmNodes').textContent=totalNodes.toLocaleString();
+  document.getElementById('mmDepth').textContent=maxDepth||'R';
+  renderMMLog(log);
+  document.getElementById('scanBar').classList.remove('on');
+
+  // AI RAGE MODE: if player winning, glitch
+  const px=board.filter(v=>v==='X').length,oa=board.filter(v=>v==='O').length;
+  if(px>oa+1)document.body.classList.add('rage-mode');
+  else document.body.classList.remove('rage-mode');
+
+  placeMove(bestMove,'O');
+  shiftCrowd(-6);
+}
+
+function minimax(b,depth,isMax,alpha,beta,maxDepth){
+  totalNodes++;
+  const r=checkWinner(b);
+  if(r){if(r.winner==='O')return 10-depth;if(r.winner==='X')return depth-10;return 0}
+  if(depth>=maxDepth)return 0;
+  const empty=b.map((v,i)=>v===null?i:-1).filter(i=>i>=0);
+  if(isMax){let best=-Infinity;for(const i of empty){b[i]='O';best=Math.max(best,minimax(b,depth+1,false,alpha,beta,maxDepth));b[i]=null;alpha=Math.max(alpha,best);if(beta<=alpha)break}return best}
+  else{let best=Infinity;for(const i of empty){b[i]='X';best=Math.min(best,minimax(b,depth+1,true,alpha,beta,maxDepth));b[i]=null;beta=Math.min(beta,best);if(beta<=alpha)break}return best}
+}
+
+// ═══════════════════════════ WIN CHECK ═══════════════════════════
+function checkWinner(b){
+  for(const [a,c,d] of WIN_LINES)if(b[a]&&b[a]===b[c]&&b[a]===b[d])return{winner:b[a],line:[a,c,d]};
+  if(b.every(v=>v))return{winner:'draw'};
+  return null;
+}
+
+// ═══════════════════════════ END GAME ═══════════════════════════
+function endGame(result){
+  gameOver=true;
+  document.getElementById('scanBar').classList.remove('on');
+  document.body.classList.remove('rage-mode');
+  clearInterval(corruptTimer);
+
+  if(result.winner==='draw'){
+    scores.d++;document.getElementById('drawBadge').textContent=scores.d+' DRAWS';
+    setStatusText('STALEMATE — THE GRID HOLDS','s-draw');sfx('draw');
+    roundHistory.push('d');shiftCrowd(0);
+    showWinOverlay('DRAW!','The quantum grid is balanced.',false);
+  } else if(result.winner==='X'){
+    scores.p1++;animScore('sP1',scores.p1);
+    document.getElementById('cardP1').classList.add('active');
+    setStatusText('⚡ VICTORY! YOU CONQUERED THE GRID! ⚡','s-win');sfx('win');
+    highlightWin(result.line,chosenChar.color);drawWinLine(result.line,chosenChar.color);
+    roundHistory.push('p1');shiftCrowd(30);
+    // Big explosion
+    result.line.forEach((idx,i)=>setTimeout(()=>{
+      spawnParts(getCellX(idx),getCellY(idx),chosenChar.color,30,8);
+      spawnRipple(getCellX(idx),getCellY(idx),chosenChar.color);
+    },i*120));
+    showWinOverlay('VICTORY!','Minimax had no answer.',true);
+  } else {
+    scores.p2++;animScore('sP2',scores.p2);
+    document.getElementById('cardP2').classList.add('active');
+    setStatusText('AI NEXUS WINS — GRID CONQUERED','s-p2');sfx('lose');
+    highlightWin(result.line,'#f72585');drawWinLine(result.line,'#f72585');
+    roundHistory.push('p2');shiftCrowd(-30);
+    document.querySelector('.wrap').classList.add('shake');setTimeout(()=>document.querySelector('.wrap').classList.remove('shake'),400);
+    result.line.forEach((idx,i)=>setTimeout(()=>spawnParts(getCellX(idx),getCellY(idx),'#f72585',20,6),i*100));
+    showWinOverlay('DEFEATED!','The AI Nexus prevails. Try again.',false);
+  }
+  updateRoundPips();
+}
+
+function showWinOverlay(title,sub,isWin){
+  const ov=document.getElementById('winOverlay');
+  const banner=document.getElementById('winBanner');
+  const subEl=document.getElementById('winSub');
+  banner.textContent=title;
+  banner.style.color=isWin?chosenChar.color:'#f72585';
+  banner.style.textShadow=`0 0 40px ${isWin?chosenChar.color:'#f72585'}`;
+  subEl.textContent=sub.toUpperCase();
+  ov.style.display='flex';
+}
+
+function closeWin(){document.getElementById('winOverlay').style.display='none';newGame()}
+
+function highlightWin(line,color){
+  line.forEach(i=>{const c=document.getElementById('cell'+i);c.classList.add('winner')})
+}
+
+function drawWinLine(line,color){
+  const wc=document.getElementById('winCanvas');
+  const ctx=wc.getContext('2d');
+  wc.width=document.getElementById('board').offsetWidth||330;
+  wc.height=document.getElementById('board').offsetHeight||330;
+  const [a,,c]=line;
+  const getCellCenter=(idx)=>{
+    const cell=document.getElementById('cell'+idx);
+    const boardRect=document.getElementById('board').getBoundingClientRect();
+    const cellRect=cell.getBoundingClientRect();
+    return[cellRect.left-boardRect.left+cellRect.width/2,cellRect.top-boardRect.top+cellRect.height/2];
+  };
+  const[x1,y1]=getCellCenter(a),[x2,y2]=getCellCenter(c);
+  let frame=0;
+  function draw(){
+    ctx.clearRect(0,0,wc.width,wc.height);
+    if(frame>10)return;
+    [18,10,4,2].forEach((lw,i)=>{
+      ctx.beginPath();ctx.moveTo(x1,y1);
+      const segs=6;
+      for(let s=1;s<segs;s++){const t=s/segs;ctx.lineTo(x1+(x2-x1)*t+(Math.random()-0.5)*(12*(1-frame/10)),y1+(y2-y1)*t+(Math.random()-0.5)*(12*(1-frame/10)))}
+      ctx.lineTo(x2,y2);
+      ctx.strokeStyle=color;ctx.lineWidth=lw;ctx.globalAlpha=[0.08,0.15,0.4,1][i]*(1-frame*0.04);ctx.shadowBlur=20;ctx.shadowColor=color;ctx.stroke();
+    });
+    ctx.globalAlpha=1;ctx.shadowBlur=0;frame++;requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+// ═══════════════════════════ CROWD ENERGY ═══════════════════════════
+function shiftCrowd(delta){
+  crowdEnergy=Math.max(0,Math.min(100,crowdEnergy+delta));
+  document.getElementById('crowdFill').style.width=crowdEnergy+'%';
+  const emoji=crowdEnergy>70?'🔥':crowdEnergy>50?'⚡':crowdEnergy>30?'😰':'💀';
+  const emojiEl=document.getElementById('crowdEmoji');
+  emojiEl.textContent=emoji;
+  emojiEl.style.left=crowdEnergy+'%';
+}
+
+// ═══════════════════════════ ROUND PIPS ═══════════════════════════
+function buildRoundPips(){
+  const row=document.getElementById('roundPips');
+  row.innerHTML='';
+  for(let i=0;i<5;i++){const pip=document.createElement('div');pip.className='round-pip';pip.id='pip'+i;row.appendChild(pip)}
+  updateRoundPips();
+}
+
+function updateRoundPips(){
+  const totalRounds=scores.p1+scores.p2+scores.d;
+  document.getElementById('roundNum').textContent=(totalRounds+1)+' / 5';
+  roundHistory.slice(-5).forEach((r,i)=>{
+    const pip=document.getElementById('pip'+i);if(!pip)return;
+    pip.className='round-pip done-'+(r==='p1'?'p1':r==='p2'?'p2':'d');
+  });
+}
+
+// ═══════════════════════════ CORRUPTION MECHANIC ═══════════════════════════
+let corruptTimer;
+function startCorruption(){
+  clearInterval(corruptTimer);
+  if(difficulty==='easy')return;
+  corruptTimer=setInterval(()=>{
+    if(gameOver||!playerTurn)return;
+    const empty=board.map((v,i)=>v===null?i:-1).filter(i=>i>=0).filter(i=>!corruptedCells.includes(i));
+    if(empty.length===0)return;
+    const target=empty[Math.floor(Math.random()*empty.length)];
+    if(!corruptedCells.includes(target)){
+      corruptedCells.push(target);
+      document.getElementById('cell'+target).classList.add('corrupted');
+      sfx('corrupt');
+      spawnText(getCellX(target),getCellY(target),'⚠ CORRUPTED','#ff3c14');
+      // Auto-uncorrupt after 5s
+      setTimeout(()=>{
+        corruptedCells=corruptedCells.filter(c=>c!==target);
+        const cell=document.getElementById('cell'+target);
+        if(cell&&!board[target])cell.classList.remove('corrupted');
+      },5000);
+    }
+  },8000);
+}
+
+// ═══════════════════════════ STATUS ═══════════════════════════
+function setStatusText(text,cls){const el=document.getElementById('statusText');el.textContent=text;el.className='status-text '+cls}
+function updateStatus(){
+  if(gameOver)return;
+  if(playerTurn){setStatusText('CHOOSE YOUR MOVE, WARRIOR','s-p1');document.getElementById('scanBar').classList.remove('on')}
+  else{setStatusText('AI NEXUS CALCULATING...','s-p2');document.getElementById('scanBar').classList.add('on')}
+  document.getElementById('cardP1').classList.toggle('active',playerTurn);
+  document.getElementById('cardP2').classList.toggle('active',!playerTurn);
+}
+
+function updateCards(){renderCards()}
+
+// ═══════════════════════════ SCORE ANIM ═══════════════════════════
+function animScore(id,val){const el=document.getElementById(id);el.textContent=val;el.classList.add('pop');setTimeout(()=>el.classList.remove('pop'),400)}
+
+// ═══════════════════════════ MM LOG ═══════════════════════════
+function renderMMLog(log){
+  const body=document.getElementById('mmBody');body.innerHTML='';
+  log.slice(-7).forEach((e,i)=>{const d=document.createElement('div');d.className='mm-row '+e.type;d.style.animationDelay=i*25+'ms';d.textContent=e.text;body.appendChild(d)});
+  body.scrollTop=body.scrollHeight;
+}
+
+// ═══════════════════════════ CONTROLS ═══════════════════════════
+function newGame(){
+  board=Array(9).fill(null);gameOver=false;playerTurn=true;
+  corruptedCells=[];lastAIMove=-1;quantumFirst=-1;activeCard=null;
+  crowdEnergy=50;shiftCrowd(0);
+  document.body.classList.remove('rage-mode');
+  document.getElementById('cardP1').classList.remove('active');
+  document.getElementById('cardP2').classList.remove('active');
+  document.getElementById('winOverlay').style.display='none';
+  document.getElementById('scanBar').classList.remove('on');
+  document.getElementById('mmBody').innerHTML='<div class="mm-row check" style="opacity:1">Awaiting computation...</div>';
+  document.getElementById('mmNodes').textContent='0';document.getElementById('mmDepth').textContent='—';
+  const wc=document.getElementById('winCanvas');wc.getContext('2d').clearRect(0,0,wc.width,wc.height);
+  buildPowerCards();buildBoard();buildRoundPips();updateStatus();startCorruption();
+}
+
+function resetAll(){scores={p1:0,p2:0,d:0};roundHistory=[];document.getElementById('sP1').textContent='0';document.getElementById('sP2').textContent='0';document.getElementById('drawBadge').textContent='0 DRAWS';newGame()}
+function setDiff(d){difficulty=d;document.querySelectorAll('.diff-pill').forEach(p=>p.classList.remove('active'));document.getElementById('dp-'+d).classList.add('active');newGame()}
+
+// ═══════════════════════════ INIT ═══════════════════════════
+buildCharSelect();
+buildRoundPips();
+// Show char select on load
+document.getElementById('charSelect').style.display='flex';
+</script>
+</body>
+</html>
